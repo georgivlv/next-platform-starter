@@ -1,22 +1,41 @@
 // netlify/functions/passenger.js
 
 export async function handler(event, context) {
-  // Only allow POST for simplicity
-  if (event.httpMethod !== 'POST') {
+  // --- Common CORS headers ---
+  const corsHeaders = {
+    "Content-Type": "application/json",
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS"
+  };
+
+  // Handle CORS preflight
+  if (event.httpMethod === "OPTIONS") {
+    return {
+      statusCode: 200,
+      headers: corsHeaders,
+      body: ""
+    };
+  }
+
+  // Only allow POST for main logic
+  if (event.httpMethod !== "POST") {
     return {
       statusCode: 405,
-      body: JSON.stringify({ error: 'Method not allowed' })
+      headers: corsHeaders,
+      body: JSON.stringify({ error: "Method not allowed" })
     };
   }
 
   // Parse body
   let payload;
   try {
-    payload = JSON.parse(event.body || '{}');
+    payload = JSON.parse(event.body || "{}");
   } catch (e) {
     return {
       statusCode: 400,
-      body: JSON.stringify({ error: 'Invalid JSON body' })
+      headers: corsHeaders,
+      body: JSON.stringify({ error: "Invalid JSON body" })
     };
   }
 
@@ -25,7 +44,8 @@ export async function handler(event, context) {
   if (!token) {
     return {
       statusCode: 400,
-      body: JSON.stringify({ error: 'Missing token' })
+      headers: corsHeaders,
+      body: JSON.stringify({ error: "Missing token" })
     };
   }
 
@@ -38,7 +58,8 @@ export async function handler(event, context) {
   if (!ODOO_URL || !ODOO_DB || !ODOO_USERNAME || !ODOO_API_KEY) {
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: 'Odoo credentials not configured on server' })
+      headers: corsHeaders,
+      body: JSON.stringify({ error: "Odoo credentials not configured on server" })
     };
   }
 
@@ -54,37 +75,37 @@ export async function handler(event, context) {
     if (!uid) {
       return {
         statusCode: 401,
-        body: JSON.stringify({ error: 'Authentication to Odoo failed' })
+        headers: corsHeaders,
+        body: JSON.stringify({ error: "Authentication to Odoo failed" })
       };
     }
 
-    if (action === 'load') {
+    // --- LOAD ACTION ---
+    if (action === "load") {
       // Load passengers for this token
       const passengersData = await odooSearchRead(
         ODOO_URL,
         ODOO_DB,
         uid,
         ODOO_API_KEY,
-        'x_tour_departure_passenger',
-        [
-          ['x_studio_test_token', '=', token]
-        ],
-        [
-          'x_passenger_email',
-          'x_passport_number',
-          'x_partner_id'
-        ]
+        "x_tour_departure_passenger",
+        [["x_studio_test_token", "=", token]],
+        ["x_passenger_email", "x_passport_number", "x_partner_id"]
       );
 
       if (!passengersData || passengersData.length === 0) {
         return {
           statusCode: 404,
-          body: JSON.stringify({ status: 'not_found', message: 'No passengers found for this token' })
+          headers: corsHeaders,
+          body: JSON.stringify({
+            status: "not_found",
+            message: "No passengers found for this token"
+          })
         };
       }
 
       // Map Odoo records to a clean JSON structure
-      const mappedPassengers = passengersData.map(p => {
+      const mappedPassengers = passengersData.map((p) => {
         // x_partner_id is a Many2one: [id, "Name"]
         const partnerField = p.x_partner_id;
         const partnerName = Array.isArray(partnerField) ? partnerField[1] : null;
@@ -93,24 +114,27 @@ export async function handler(event, context) {
           id: p.id,
           name: partnerName,
           email: p.x_passenger_email || null,
-          passport_number: p.x_passport_number || ''
+          passport_number: p.x_passport_number || ""
         };
       });
 
       return {
         statusCode: 200,
+        headers: corsHeaders,
         body: JSON.stringify({
-          status: 'ok',
+          status: "ok",
           passengers: mappedPassengers
         })
       };
     }
 
-    if (action === 'save') {
+    // --- SAVE ACTION ---
+    if (action === "save") {
       if (!Array.isArray(passengers)) {
         return {
           statusCode: 400,
-          body: JSON.stringify({ error: 'Missing passengers array for save action' })
+          headers: corsHeaders,
+          body: JSON.stringify({ error: "Missing passengers array for save action" })
         };
       }
 
@@ -120,14 +144,12 @@ export async function handler(event, context) {
         ODOO_DB,
         uid,
         ODOO_API_KEY,
-        'x_tour_departure_passenger',
-        [
-          ['x_studio_test_token', '=', token]
-        ],
-        ['id']
+        "x_tour_departure_passenger",
+        [["x_studio_test_token", "=", token]],
+        ["id"]
       );
 
-      const validIds = new Set((existing || []).map(p => p.id));
+      const validIds = new Set((existing || []).map((p) => p.id));
 
       // For each passenger payload, update passport_number (or any other fields later)
       for (const p of passengers) {
@@ -138,8 +160,8 @@ export async function handler(event, context) {
 
         const vals = {};
 
-        if (typeof p.passport_number === 'string') {
-          vals['x_passport_number'] = p.passport_number;
+        if (typeof p.passport_number === "string") {
+          vals["x_passport_number"] = p.passport_number;
         }
 
         // If nothing to write, skip
@@ -152,7 +174,7 @@ export async function handler(event, context) {
           ODOO_DB,
           uid,
           ODOO_API_KEY,
-          'x_tour_departure_passenger',
+          "x_tour_departure_passenger",
           p.id,
           vals
         );
@@ -160,21 +182,23 @@ export async function handler(event, context) {
 
       return {
         statusCode: 200,
-        body: JSON.stringify({ status: 'ok' })
+        headers: corsHeaders,
+        body: JSON.stringify({ status: "ok" })
       };
     }
 
     // Unknown action
     return {
       statusCode: 400,
-      body: JSON.stringify({ error: 'Unknown action' })
+      headers: corsHeaders,
+      body: JSON.stringify({ error: "Unknown action" })
     };
-
   } catch (err) {
-    console.error('Netlify function error:', err);
+    console.error("Netlify function error:", err);
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: 'Server error', details: String(err) })
+      headers: corsHeaders,
+      body: JSON.stringify({ error: "Server error", details: String(err) })
     };
   }
 }
@@ -183,9 +207,9 @@ export async function handler(event, context) {
 
 async function odooJsonRpc(odooUrl, body) {
   const res = await fetch(`${odooUrl}/jsonrpc`, {
-    method: 'POST',
+    method: "POST",
     headers: {
-      'Content-Type': 'application/json'
+      "Content-Type": "application/json"
     },
     body: JSON.stringify(body)
   });
@@ -204,11 +228,11 @@ async function odooJsonRpc(odooUrl, body) {
 
 async function odooAuthenticate(odooUrl, db, username, apiKey) {
   const payload = {
-    jsonrpc: '2.0',
-    method: 'call',
+    jsonrpc: "2.0",
+    method: "call",
     params: {
-      service: 'common',
-      method: 'authenticate',
+      service: "common",
+      method: "authenticate",
       args: [db, username, apiKey, {}]
     }
   };
@@ -216,22 +240,22 @@ async function odooAuthenticate(odooUrl, db, username, apiKey) {
   return result; // uid or false
 }
 
-async function odooSearchRead(odooUrl, db, uid, apiKey, model, domain, fields) {
+async function odooSearchRead(
+  odooUrl,
+  db,
+  uid,
+  apiKey,
+  model,
+  domain,
+  fields
+) {
   const payload = {
-    jsonrpc: '2.0',
-    method: 'call',
+    jsonrpc: "2.0",
+    method: "call",
     params: {
-      service: 'object',
-      method: 'execute_kw',
-      args: [
-        db,
-        uid,
-        apiKey,
-        model,
-        'search_read',
-        [domain],
-        { fields: fields }
-      ]
+      service: "object",
+      method: "execute_kw",
+      args: [db, uid, apiKey, model, "search_read", [domain], { fields: fields }]
     }
   };
   const result = await odooJsonRpc(odooUrl, payload);
@@ -240,19 +264,12 @@ async function odooSearchRead(odooUrl, db, uid, apiKey, model, domain, fields) {
 
 async function odooWrite(odooUrl, db, uid, apiKey, model, id, vals) {
   const payload = {
-    jsonrpc: '2.0',
-    method: 'call',
+    jsonrpc: "2.0",
+    method: "call",
     params: {
-      service: 'object',
-      method: 'execute_kw',
-      args: [
-        db,
-        uid,
-        apiKey,
-        model,
-        'write',
-        [[id], vals]
-      ]
+      service: "object",
+      method: "execute_kw",
+      args: [db, uid, apiKey, model, "write", [[id], vals]]
     }
   };
   const result = await odooJsonRpc(odooUrl, payload);
