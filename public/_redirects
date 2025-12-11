@@ -1,5 +1,5 @@
 # Block all site pages (no frontend access)
-/*    /blocked    401
+/*    /blocked.html    401
 
 # Allow serverless functions to run normally
 /.netlify/functions/*    200
