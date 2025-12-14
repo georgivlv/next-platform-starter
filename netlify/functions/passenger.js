@@ -1,9 +1,10 @@
 // netlify/functions/passenger.js
 
 const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',          // later you can restrict to your domain
+  'Access-Control-Allow-Origin': 'https://adventurebound.travel',
   'Access-Control-Allow-Headers': 'Content-Type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Content-Type': 'application/json',
 };
 
 export async function handler(event, context) {
