@@ -1,13 +1,27 @@
 // netlify/functions/passenger.js
 
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': 'https://adventurebound.travel',
-  'Access-Control-Allow-Headers': 'Content-Type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Content-Type': 'application/json',
-};
+function buildCorsHeaders(event) {
+  const allowedOrigins = new Set([
+    'https://adventurebound.travel',
+    'https://www.adventurebound.travel',
+  ]);
+
+  const origin = event?.headers?.origin || event?.headers?.Origin || '';
+  const allowOrigin = allowedOrigins.has(origin)
+    ? origin
+    : 'https://www.adventurebound.travel';
+
+  return {
+    'Access-Control-Allow-Origin': allowOrigin,
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Content-Type': 'application/json',
+  };
+}
 
 export async function handler(event, context) {
+  const CORS_HEADERS = buildCorsHeaders(event);
+
   // --- CORS preflight ---
   if (event.httpMethod === 'OPTIONS') {
     return {
@@ -222,7 +236,7 @@ export async function handler(event, context) {
           first_name: p.x_passenger_first_name || null,
           middle_name: p.x_passenger_middle_name || null,
           last_name: p.x_passenger_last_name || null,
-          sex: p.x_sex || null,                  // MALE / FEMALE
+          sex: p.x_sex || null,                        // MALE / FEMALE
           marital_status: p.x_marrital_status || null, // SINGLE/MARRIED/...
           date_of_birth: p.x_date_of_birth || null,
           nationality: p.x_nationality || null,
@@ -267,7 +281,7 @@ export async function handler(event, context) {
         headers: CORS_HEADERS,
         body: JSON.stringify({
           status: 'ok',
-          departure: departureInfo,      // <-- tour name + dates, per token
+          departure: departureInfo, // <-- tour name + dates, per token
           passengers: mappedPassengers
         }),
       };
@@ -311,24 +325,9 @@ export async function handler(event, context) {
 
         // Currently: only passport_number is editable.
         // Add more fields here later as needed.
-
         if (typeof p.passport_number === 'string') {
           vals['x_passport_number'] = p.passport_number;
         }
-
-        /*
-        // Examples of additional editable fields:
-        if (typeof p.diet === 'string') vals['x_diet'] = p.diet;
-        if (typeof p.allergies === 'string') vals['x_allergies'] = p.allergies;
-        if (typeof p.medical_conditions === 'string') vals['x_medical_conditions'] = p.medical_conditions;
-        if (typeof p.emergency_contact === 'string') vals['x_emergency_contact'] = p.emergency_contact;
-        if (typeof p.emergency_contact_number === 'string') vals['x_emergency_contact_number'] = p.emergency_contact_number;
-        if (typeof p.nationality === 'string') vals['x_nationality'] = p.nationality;
-        if (typeof p.notes === 'string') vals['x_notes'] = p.notes;
-        if (typeof p.pre_tour_extra_night === 'string') vals['x_pre_tour_extra_night'] = p.pre_tour_extra_night;
-        if (typeof p.post_tour_extra_night === 'string') vals['x_post_tour_extra_night'] = p.post_tour_extra_night;
-        if (typeof p.type_of_room === 'string') vals['x_type_of_room'] = p.type_of_room;
-        */
 
         if (Object.keys(vals).length === 0) {
           continue;
