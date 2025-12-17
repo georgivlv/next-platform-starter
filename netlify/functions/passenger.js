@@ -29,13 +29,18 @@ function toOdooDate(ddmmyyyy) {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+function cleanText(v) {
+  if (v == null) return null;
+  const s = String(v).trim();
+  return s.length ? s : null;
+}
+
 function normalizeSex(v) {
   if (!v) return null;
   const s = String(v).trim().toLowerCase();
   if (s === 'male') return 'MALE';
   if (s === 'female') return 'FEMALE';
   if (s === 'rather not say' || s === 'rather_not_say' || s === 'prefer not to say') return 'RATHER_NOT_SAY';
-  // if already in Odoo format, keep
   return String(v).trim();
 }
 
@@ -128,7 +133,7 @@ export async function handler(event, context) {
           // core linkage
           'x_studio_test_token',
           'x_partner_id',
-          'x_departure_id', // <-- keep only this (x_tour_departure removed)
+          'x_departure_id',
 
           // personal / contact
           'x_name',
@@ -149,6 +154,8 @@ export async function handler(event, context) {
           'x_sharing_with',
           'x_pre_tour_extra_night',
           'x_post_tour_extra_night',
+
+          // flight details (FREE TEXT)
           'x_flight_arrival',
           'x_flight_departure',
 
@@ -224,10 +231,13 @@ export async function handler(event, context) {
           id: p.id,
           token: p.x_studio_test_token || null,
 
+          // for display/reference (your header)
           partner,
+          passenger_reference_name: (partner && partner.name) ? partner.name : null,
+
           departure_m2o: dep,
 
-          name: p.x_name || (partner && partner.name) || null,
+          // passport-driven fields (customer fills)
           first_name: p.x_passenger_first_name || null,
           middle_name: p.x_passenger_middle_name || null,
           last_name: p.x_passenger_last_name || null,
@@ -245,6 +255,8 @@ export async function handler(event, context) {
           sharing_with: p.x_sharing_with || null,
           pre_tour_extra_night: p.x_pre_tour_extra_night || null,
           post_tour_extra_night: p.x_post_tour_extra_night || null,
+
+          // FREE TEXT flight details
           flight_arrival: p.x_flight_arrival || null,
           flight_departure: p.x_flight_departure || null,
 
@@ -304,41 +316,50 @@ export async function handler(event, context) {
 
         const vals = {};
 
-        // Names
-        if (typeof p.first_name === 'string') vals['x_passenger_first_name'] = p.first_name;
-        if (typeof p.middle_name === 'string') vals['x_passenger_middle_name'] = p.middle_name;
-        if (typeof p.last_name === 'string') vals['x_passenger_last_name'] = p.last_name;
+        // Names (passport)
+        if (typeof p.first_name === 'string') vals['x_passenger_first_name'] = cleanText(p.first_name);
+        if (typeof p.middle_name === 'string') vals['x_passenger_middle_name'] = cleanText(p.middle_name);
+        if (typeof p.last_name === 'string') vals['x_passenger_last_name'] = cleanText(p.last_name);
 
         // Select fields
         if (p.sex != null) vals['x_sex'] = normalizeSex(p.sex);
         if (p.marital_status != null) vals['x_marrital_status'] = normalizeMaritalStatus(p.marital_status);
 
-        // Dates (dd/mm/yyyy -> YYYY-MM-DD)
+        // Dates (frontend should send ISO; we keep fallback)
         if (p.date_of_birth != null) {
-          const d = toOdooDate(p.date_of_birth) || p.date_of_birth; // allow already-ISO
+          const d = toOdooDate(p.date_of_birth) || cleanText(p.date_of_birth);
           vals['x_date_of_birth'] = d;
         }
         if (p.passport_issue_date != null) {
-          const d = toOdooDate(p.passport_issue_date) || p.passport_issue_date;
+          const d = toOdooDate(p.passport_issue_date) || cleanText(p.passport_issue_date);
           vals['x_passport_issue_date'] = d;
         }
         if (p.passport_expiry_date != null) {
-          const d = toOdooDate(p.passport_expiry_date) || p.passport_expiry_date;
+          const d = toOdooDate(p.passport_expiry_date) || cleanText(p.passport_expiry_date);
           vals['x_passport_expiry_date'] = d;
         }
 
         // Contact
-        if (typeof p.email === 'string') vals['x_passenger_email'] = p.email;
-        if (typeof p.nationality === 'string') vals['x_nationality'] = p.nationality;
-        if (typeof p.home_address === 'string') vals['x_home_address'] = p.home_address;
-        if (typeof p.job_position === 'string') vals['x_job_position'] = p.job_position;
-        if (typeof p.working_at === 'string') vals['x_working_at'] = p.working_at;
+        if (typeof p.email === 'string') vals['x_passenger_email'] = cleanText(p.email);
+        if (typeof p.nationality === 'string') vals['x_nationality'] = cleanText(p.nationality);
+        if (typeof p.home_address === 'string') vals['x_home_address'] = cleanText(p.home_address);
+        if (typeof p.job_position === 'string') vals['x_job_position'] = cleanText(p.job_position);
+        if (typeof p.working_at === 'string') vals['x_working_at'] = cleanText(p.working_at);
+
+        // Flight details (FREE TEXT)  ✅
+        if (typeof p.flight_arrival === 'string') vals['x_flight_arrival'] = cleanText(p.flight_arrival);
+        if (typeof p.flight_departure === 'string') vals['x_flight_departure'] = cleanText(p.flight_departure);
 
         // Passport number
-        if (typeof p.passport_number === 'string') vals['x_passport_number'] = p.passport_number;
+        if (typeof p.passport_number === 'string') vals['x_passport_number'] = cleanText(p.passport_number) || '';
 
         // Misc
-        if (typeof p.notes === 'string') vals['x_notes'] = p.notes;
+        if (typeof p.notes === 'string') vals['x_notes'] = cleanText(p.notes);
+
+        // Remove keys with null to avoid overwriting with nulls (optional but safer)
+        for (const k of Object.keys(vals)) {
+          if (vals[k] === null) delete vals[k];
+        }
 
         if (Object.keys(vals).length === 0) continue;
 
